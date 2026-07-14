@@ -8,6 +8,16 @@
  * Usage:
  *   node map.js --url https://example.com --depth 0 --wait-selector "#app" --out ./reports/example
  *
+ * Interactive mode maps the page, then prompts you to pick elements off a
+ * live, categorized menu (upload targets / text fields / clickable) and
+ * click/fill/upload into them one at a time, re-scanning the DOM between
+ * each action, with all network traffic logged throughout:
+ *   node map.js --url https://example.com --interactive --out ./reports/example
+ *
+ * Non-interactive scripted upload (for automation/CI, no prompts):
+ *   node map.js --url https://example.com --upload-selector "#avatar" \
+ *     --upload-file ./test.jpg --click-after-upload "#submit" --out ./reports/example
+ *
  * On Android/Termux, Playwright cannot launch its bundled browser binaries
  * ("Unsupported platform: android"), so this script connects to a remote
  * browser instead — specifically Browserless.io's Playwright-native
