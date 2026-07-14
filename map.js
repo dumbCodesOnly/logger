@@ -30,6 +30,7 @@ function parseArgs(argv) {
     else if (a === '--upload-selector') args.uploadSelector = argv[++i] || '';
     else if (a === '--upload-file') args.uploadFile = argv[++i] || '';
     else if (a === '--click-after-upload') args.clickAfterUpload = argv[++i] || '';
+    else if (a === '--interactive') args.interactive = true;
   }
   return args;
 }
