@@ -107,6 +107,109 @@ function countNodes(node) {
   return 1 + (node.children || []).reduce((sum, c) => sum + countNodes(c), 0);
 }
 
+// Attaches request/response listeners to a page and returns a live array
+// that fills up with entries as traffic happens. Attach BEFORE goto() so
+// the initial page load is captured too, not just later interactions.
+function attachNetworkLogging(page) {
+  const log = [];
+  const byRequest = new Map();
+
+  page.on('request', (req) => {
+    const entry = {
+      method: req.method(),
+      url: req.url(),
+      resourceType: req.resourceType(),
+      requestHeaders: req.headers(),
+      postDataSize: (() => { try { const d = req.postData(); return d ? d.length : 0; } catch { return 0; } })(),
+      startedAt: new Date().toISOString(),
+      status: null,
+      statusText: null,
+      responseHeaders: null,
+      durationMs: null,
+      failed: null,
+    };
+    byRequest.set(req, entry);
+    log.push(entry);
+  });
+
+  page.on('response', (res) => {
+    const req = res.request();
+    const entry = byRequest.get(req);
+    if (!entry) return;
+    entry.status = res.status();
+    entry.statusText = res.statusText();
+    entry.responseHeaders = res.headers();
+    entry.durationMs = Date.now() - Date.parse(entry.startedAt);
+  });
+
+  page.on('requestfailed', (req) => {
+    const entry = byRequest.get(req);
+    if (!entry) return;
+    const failure = req.failure();
+    entry.failed = failure ? failure.errorText : 'failed';
+  });
+
+  return log;
+}
+
+// Finds a file input (by selector, or the first <input type="file"> on the
+// page if no selector given), uploads a file into it via setInputFiles, and
+// optionally clicks a submit/upload button afterward. If no file is given,
+// a throwaway 1x1 PNG is generated so the interaction can still be exercised
+// end-to-end without the caller needing to supply an image.
+async function attemptImageUpload(page, { uploadSelector, uploadFile, clickAfterUpload }) {
+  const result = {
+    attempted: false,
+    selector: uploadSelector || null,
+    file: uploadFile || null,
+    success: false,
+    clicked: false,
+    error: null,
+  };
+
+  try {
+    let selector = uploadSelector;
+    if (!selector) {
+      const hasFileInput = await page.$('input[type="file"]');
+      if (!hasFileInput) {
+        result.error = 'No file input found on page (pass --upload-selector to target one explicitly)';
+        return result;
+      }
+      selector = 'input[type="file"]';
+      result.selector = selector;
+    }
+
+    let filePath = uploadFile;
+    if (!filePath) {
+      filePath = path.join(require('os').tmpdir(), 'domap-test-upload.png');
+      if (!fs.existsSync(filePath)) {
+        const onePixelPng = Buffer.from(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+          'base64'
+        );
+        fs.writeFileSync(filePath, onePixelPng);
+      }
+      result.file = filePath;
+    }
+
+    result.attempted = true;
+    await page.setInputFiles(selector, filePath);
+    result.success = true;
+
+    if (clickAfterUpload) {
+      await page.click(clickAfterUpload, { timeout: 5000 });
+      result.clicked = true;
+      // Give any resulting XHR/fetch upload request time to fire and land
+      // in the network log before we close the page.
+      await page.waitForTimeout(3000);
+    }
+  } catch (e) {
+    result.error = e.message;
+  }
+
+  return result;
+}
+
 function buildHtmlReport(data) {
   const esc = (s) => (s || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
