@@ -203,11 +203,27 @@ async function main() {
   }
   fs.mkdirSync(args.out, { recursive: true });
 
+  // playwright-core throws "Unsupported platform: android" the moment it's
+  // require()'d on Termux — this check runs eagerly in its registry module,
+  // not just when launching a bundled browser. Termux's userland is Linux
+  // underneath, and we only ever use connectOverCDP() (attaching to a
+  // Chromium process we start ourselves), which never touches Android-
+  // specific binary paths. So it's safe to spoof the platform just for this
+  // require, letting the module load normally.
+  const realPlatform = process.platform;
+  if (realPlatform === 'android') {
+    Object.defineProperty(process, 'platform', { value: 'linux' });
+  }
+
   let chromium;
   try {
     chromium = require('playwright-chromium').chromium;
   } catch (e) {
     chromium = require('playwright').chromium;
+  } finally {
+    if (realPlatform === 'android') {
+      Object.defineProperty(process, 'platform', { value: realPlatform });
+    }
   }
 
   // Android/Termux can't launch Playwright's bundled browser binaries
