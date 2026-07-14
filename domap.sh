@@ -81,12 +81,6 @@ run_map() {
 
   read -rp "CSS selector to wait for before capturing (optional, e.g. #app): " wait_sel
 
-  read -rp "Interactive mode? Map first, then pick elements to click/fill/upload live (y/n): " do_interactive
-  local interactive_flag=""
-  if [[ "$do_interactive" == "y" || "$do_interactive" == "Y" ]]; then
-    interactive_flag="--interactive"
-  fi
-
   ws_url=$(get_browserless_ws_url) || return
 
   out_name=$(echo "$url" | sed -E 's#https?://##; s#[^a-zA-Z0-9]+#_#g' | cut -c1-60)
@@ -99,10 +93,29 @@ run_map() {
     --url "$url" \
     --depth "$depth" \
     --wait-selector "${wait_sel:-}" \
-    $interactive_flag \
     --out "$report_dir" \
   && echo "$(date '+%Y-%m-%d %H:%M') | $url | $report_dir" >> "$HISTORY_FILE" \
-  && echo -e "${C_GREEN}Done.${C_RESET} Report: $report_dir/report.html (see Network and Actions tabs)"
+  && echo -e "${C_GREEN}Done.${C_RESET} Report: $report_dir/report.html" \
+  && echo -e "${C_CYAN}Tip:${C_RESET} to click/fill/upload into elements on this page, use menu option 6 (Interact with a mapped page)."
+}
+
+run_interact() {
+  list_reports
+  [ ! -s "$HISTORY_FILE" ] && return
+  read -rp "Enter number of the report to interact with (or blank to cancel): " n
+  [ -z "$n" ] && return
+  line=$(sed -n "${n}p" "$HISTORY_FILE") || true
+  [ -z "$line" ] && { echo "Invalid selection."; return; }
+  dir=$(echo "$line" | awk -F'| ' '{print $NF}' | xargs)
+  if [ ! -f "$dir/dom.json" ]; then
+    echo -e "${C_RED}No dom.json in $dir (static-fetch reports have no selectors to interact with).${C_RESET}"
+    return
+  fi
+
+  ws_url=$(get_browserless_ws_url) || return
+
+  echo -e "${C_GREEN}Loading saved map from $dir (offline, no browser connected yet)...${C_RESET}"
+  BROWSERLESS_WS_URL="$ws_url" node "$SCRIPT_DIR/interact.js" --report "$dir"
 }
 
 run_map_static() {
