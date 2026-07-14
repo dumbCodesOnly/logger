@@ -7,6 +7,12 @@
  *
  * Usage:
  *   node map.js --url https://example.com --depth 0 --wait-selector "#app" --out ./reports/example
+ *
+ * On Android/Termux, Playwright cannot launch its bundled browser binaries
+ * ("Unsupported platform: android"). Instead, this script connects over CDP
+ * to a Chromium instance you start yourself, e.g.:
+ *   chromium --headless --remote-debugging-port=9222 --no-sandbox &
+ * Set CDP_URL to override the default (http://localhost:9222).
  */
 
 const fs = require('fs');
@@ -204,9 +210,25 @@ async function main() {
     chromium = require('playwright').chromium;
   }
 
-  const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
+  // Android/Termux can't launch Playwright's bundled browser binaries
+  // ("Unsupported platform: android"), so connect over CDP to a Chromium
+  // process started separately, e.g.:
+  //   chromium --headless --remote-debugging-port=9222 --no-sandbox &
+  const cdpUrl = process.env.CDP_URL || 'http://localhost:9222';
+  let browser;
   try {
-    const { title, tree } = await mapUrl(browser, args.url, args.waitSelector);
+    browser = await chromium.connectOverCDP(cdpUrl);
+  } catch (e) {
+    console.error(`Could not connect to Chromium at ${cdpUrl}.`);
+    console.error('Start a headless Chromium with remote debugging first, e.g.:');
+    console.error('  chromium --headless --remote-debugging-port=9222 --no-sandbox &');
+    console.error(`Original error: ${e.message}`);
+    process.exit(1);
+  }
+  try {
+    // connectOverCDP gives us an existing browser context rather than a fresh one
+    const context = browser.contexts()[0] || await browser.newContext();
+    const { title, tree } = await mapUrl(context, args.url, args.waitSelector);
     const interactive = flattenInteractive(tree);
     const data = {
       url: args.url,
