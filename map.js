@@ -243,6 +243,27 @@ function buildHtmlReport(data) {
       <td>${el.bbox ? `${el.bbox.x},${el.bbox.y} ${el.bbox.w}x${el.bbox.h}` : ''}</td>
     </tr>`).join('');
 
+  const network = data.network || [];
+  const networkRows = network.map(n => `
+    <tr>
+      <td><code>${esc(n.method)}</code></td>
+      <td class="url-cell">${esc(n.url)}</td>
+      <td>${esc(n.resourceType || '')}</td>
+      <td>${n.status != null ? n.status : (n.failed ? 'FAILED' : 'pending')}</td>
+      <td>${n.durationMs != null ? n.durationMs + 'ms' : ''}</td>
+      <td>${n.postDataSize ? n.postDataSize + ' B' : ''}</td>
+    </tr>`).join('');
+
+  const upload = data.upload;
+  const uploadSummary = upload ? `
+    <div class="meta">
+      Upload attempt: ${upload.attempted ? (upload.success ? '<span class="badge">success</span>' : '<span class="badge" style="background:#8b1a1a">failed</span>') : 'not attempted'}
+      ${upload.selector ? ` • selector: <code>${esc(upload.selector)}</code>` : ''}
+      ${upload.file ? ` • file: <code>${esc(upload.file)}</code>` : ''}
+      ${upload.clicked ? ' • clicked follow-up button' : ''}
+      ${upload.error ? ` • error: ${esc(upload.error)}` : ''}
+    </div>` : '';
+
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>DOM Map: ${esc(data.url)}</title>
 <style>
