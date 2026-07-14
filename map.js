@@ -485,16 +485,36 @@ async function mapUrl(browser, url, waitSelector, interactionOpts = {}) {
     try { await page.waitForSelector(waitSelector, { timeout: 10000 }); } catch (e) { /* continue anyway */ }
   }
 
-  let upload = null;
-  const { uploadSelector, uploadFile, clickAfterUpload } = interactionOpts;
-  if (uploadSelector || uploadFile || clickAfterUpload) {
-    upload = await attemptImageUpload(page, { uploadSelector, uploadFile, clickAfterUpload });
+  const title = await page.title();
+  let tree, actions = [];
+
+  if (interactionOpts.interactive) {
+    // Live mode: map the DOM, then let the user pick elements off a menu
+    // (upload/type/click) one at a time, re-scanning between each pick.
+    const session = await runInteractiveSession(page);
+    tree = session.tree;
+    actions = session.actions;
+  } else {
+    tree = await page.evaluate(extractTree);
+    const { uploadSelector, uploadFile, clickAfterUpload } = interactionOpts;
+    if (uploadSelector || uploadFile || clickAfterUpload) {
+      const uploadResult = await attemptImageUpload(page, { uploadSelector, uploadFile, clickAfterUpload });
+      actions.push({
+        timestamp: new Date().toISOString(),
+        selector: uploadResult.selector,
+        action: 'upload',
+        label: '',
+        file: uploadResult.file,
+        success: uploadResult.success,
+        error: uploadResult.error,
+        clicked: uploadResult.clicked,
+      });
+      tree = await page.evaluate(extractTree); // re-extract so the report reflects any resulting DOM change
+    }
   }
 
-  const title = await page.title();
-  const tree = await page.evaluate(extractTree);
   await page.close();
-  return { title, tree, network, upload };
+  return { title, tree, network, actions };
 }
 
 async function main() {
