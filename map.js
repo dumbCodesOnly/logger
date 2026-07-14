@@ -367,7 +367,7 @@ async function runInteractiveSession(page) {
           }
         }
         entry.file = filePath;
-        await page.setInputFiles(el.sel, filePath);
+        entry.method = await performUpload(page, el.sel, filePath);
         entry.success = true;
       } else if (actionAns === 'type') {
         const text = await ask('Text to type: ');
