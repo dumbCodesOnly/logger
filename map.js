@@ -304,8 +304,14 @@ async function runInteractiveSession(page) {
   let tree, interactive;
 
   async function rescan() {
-    tree = await page.evaluate(extractTree);
-    interactive = flattenInteractive(tree);
+    try {
+      tree = await page.evaluate(extractTree);
+      interactive = flattenInteractive(tree);
+      return true;
+    } catch (e) {
+      console.log(`\n\u26a0\ufe0f  Lost connection to the page (${e.message}). Ending session with what was captured so far.\n`);
+      return false;
+    }
   }
   await rescan();
 
@@ -390,7 +396,8 @@ async function runInteractiveSession(page) {
     actions.push(entry);
     console.log(entry.success ? `\u2705 ${actionAns} on [${idx}] done.\n` : `\u274c ${actionAns} on [${idx}] failed: ${entry.error}\n`);
 
-    await rescan();
+    const stillAlive = await rescan();
+    if (!stillAlive) break;
   }
 
   rl.close();
