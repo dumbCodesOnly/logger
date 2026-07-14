@@ -257,7 +257,7 @@ async function attemptImageUpload(page, { uploadSelector, uploadFile, clickAfter
     }
 
     result.attempted = true;
-    await page.setInputFiles(selector, filePath);
+    result.method = await performUpload(page, selector, filePath);
     result.success = true;
 
     if (clickAfterUpload) {
