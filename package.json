@@ -1,0 +1,12 @@
+{
+  "name": "domap",
+  "version": "1.0.0",
+  "description": "Termux DOM/UI structure mapper using headless Chromium",
+  "main": "map.js",
+  "scripts": {
+    "map": "node map.js"
+  },
+  "dependencies": {
+    "playwright-chromium": "^1.61.1"
+  }
+}
