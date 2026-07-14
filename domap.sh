@@ -137,10 +137,11 @@ show_summary() {
   [ -z "$line" ] && { echo "Invalid selection."; return; }
   dir=$(echo "$line" | awk -F'| ' '{print $NF}' | xargs)
   json="$dir/dom.json"
+  [ ! -f "$json" ] && json="$dir/dom-static.json"
   if [ -f "$json" ]; then
     node "$SCRIPT_DIR/summarize.js" "$json"
   else
-    echo -e "${C_RED}dom.json missing in $dir${C_RESET}"
+    echo -e "${C_RED}No dom.json or dom-static.json found in $dir${C_RESET}"
   fi
 }
 
