@@ -27,6 +27,9 @@ function parseArgs(argv) {
     else if (a === '--depth') args.depth = parseInt(argv[++i], 10) || 0;
     else if (a === '--wait-selector') args.waitSelector = argv[++i] || '';
     else if (a === '--out') args.out = argv[++i];
+    else if (a === '--upload-selector') args.uploadSelector = argv[++i] || '';
+    else if (a === '--upload-file') args.uploadFile = argv[++i] || '';
+    else if (a === '--click-after-upload') args.clickAfterUpload = argv[++i] || '';
   }
   return args;
 }
