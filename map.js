@@ -561,7 +561,7 @@ async function mapUrl(browser, url, waitSelector, interactionOpts = {}) {
     }
   }
 
-  await page.close();
+  await page.close().catch(() => {}); // may already be closed if the session died mid-interaction
   return { title, tree, network, actions };
 }
 
