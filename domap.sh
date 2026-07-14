@@ -81,6 +81,14 @@ run_map() {
 
   read -rp "CSS selector to wait for before capturing (optional, e.g. #app): " wait_sel
 
+  read -rp "Attempt an image upload? (y/n): " do_upload
+  local upload_selector="" upload_file="" click_after=""
+  if [[ "$do_upload" == "y" || "$do_upload" == "Y" ]]; then
+    read -rp "  File input CSS selector (blank = auto-detect first input[type=file]): " upload_selector
+    read -rp "  Path to image file to upload (blank = generate a throwaway 1x1 PNG): " upload_file
+    read -rp "  CSS selector of a submit/upload button to click afterward (optional): " click_after
+  fi
+
   ws_url=$(get_browserless_ws_url) || return
 
   out_name=$(echo "$url" | sed -E 's#https?://##; s#[^a-zA-Z0-9]+#_#g' | cut -c1-60)
@@ -93,9 +101,12 @@ run_map() {
     --url "$url" \
     --depth "$depth" \
     --wait-selector "${wait_sel:-}" \
+    --upload-selector "${upload_selector:-}" \
+    --upload-file "${upload_file:-}" \
+    --click-after-upload "${click_after:-}" \
     --out "$report_dir" \
   && echo "$(date '+%Y-%m-%d %H:%M') | $url | $report_dir" >> "$HISTORY_FILE" \
-  && echo -e "${C_GREEN}Done.${C_RESET} Report: $report_dir/report.html"
+  && echo -e "${C_GREEN}Done.${C_RESET} Report: $report_dir/report.html (see Network tab for logged requests)"
 }
 
 run_map_static() {
