@@ -118,7 +118,7 @@ function flattenInteractive(node, list = []) {
     list.push({
       tag: node.tag, id: node.id, classes: node.classes, role: node.role,
       ariaLabel: node.ariaLabel, name: node.name, type: node.type,
-      href: node.href, text: node.text, bbox: node.bbox
+      href: node.href, text: node.text, bbox: node.bbox, sel: node.sel
     });
   }
   (node.children || []).forEach(c => flattenInteractive(c, list));
