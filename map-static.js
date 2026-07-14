@@ -24,7 +24,29 @@ function parseArgs(argv) {
 }
 
 const MAX_TEXT = 80;
-const INTERACTIVE_TAGS = new Set(['a', 'button', 'input', 'select', 'textarea', 'label', 'form']);
+
+// Tags that are inherently interactive regardless of attributes.
+const INTERACTIVE_TAGS = new Set(['a', 'button', 'input', 'select', 'textarea', 'label', 'form', 'details', 'summary', 'option', 'dialog']);
+
+// ARIA roles that imply an interactive widget (from WAI-ARIA widget roles).
+const INTERACTIVE_ROLES = new Set([
+  'button', 'link', 'checkbox', 'radio', 'switch', 'tab', 'menuitem',
+  'menuitemcheckbox', 'menuitemradio', 'option', 'textbox', 'searchbox',
+  'combobox', 'listbox', 'slider', 'spinbutton', 'treeitem'
+]);
+
+// Native HTML event-handler attributes commonly used for click/interaction.
+const EVENT_ATTRS = ['onclick', 'onchange', 'onsubmit', 'onkeydown', 'onkeyup', 'onmousedown', 'onmouseup', 'ontouchstart', 'ontouchend', 'onpointerdown'];
+
+// Framework/library conventions that mark an element as a bound interactive
+// target even before hydration (React/Vue/Alpine/htmx attributes commonly
+// left in server-rendered markup).
+const FRAMEWORK_HINT_PREFIXES = ['data-action', 'data-click', 'data-toggle', 'data-target', 'data-testid', '@click', 'v-on:click', 'x-on:click', 'hx-post', 'hx-get', 'hx-trigger'];
+
+function hasFrameworkHint($el) {
+  const attribs = $el.get(0)?.attribs || {};
+  return Object.keys(attribs).some(a => FRAMEWORK_HINT_PREFIXES.some(p => a === p || a.startsWith(p)));
+}
 
 function shortText($el) {
   const t = ($el.text() || $el.attr('value') || $el.attr('placeholder') || '').trim().replace(/\s+/g, ' ');
@@ -37,19 +59,32 @@ function walk($, el) {
   const $el = $(el);
 
   const classAttr = $el.attr('class');
-  const interactive = INTERACTIVE_TAGS.has(tag) || $el.attr('onclick') !== undefined || $el.attr('role') === 'button';
+  const role = $el.attr('role');
+  const tabindex = $el.attr('tabindex');
+  const contentEditable = $el.attr('contenteditable');
+
+  const interactiveReasons = [];
+  if (INTERACTIVE_TAGS.has(tag)) interactiveReasons.push('tag');
+  if (role && INTERACTIVE_ROLES.has(role)) interactiveReasons.push('role');
+  if (tabindex !== undefined && tabindex !== '-1') interactiveReasons.push('tabindex');
+  if (contentEditable === '' || contentEditable === 'true') interactiveReasons.push('contenteditable');
+  if (EVENT_ATTRS.some(a => $el.attr(a) !== undefined)) interactiveReasons.push('event-handler');
+  if (hasFrameworkHint($el)) interactiveReasons.push('framework-hint');
+
+  const interactive = interactiveReasons.length > 0;
 
   const node = {
     tag,
     id: $el.attr('id') || undefined,
     classes: classAttr ? classAttr.trim().split(/\s+/).filter(Boolean) : undefined,
-    role: $el.attr('role') || undefined,
+    role: role || undefined,
     ariaLabel: $el.attr('aria-label') || undefined,
     name: $el.attr('name') || undefined,
     type: $el.attr('type') || undefined,
     href: tag === 'a' ? $el.attr('href') || undefined : undefined,
     text: shortText($el) || undefined,
     interactive,
+    interactiveReasons: interactive ? interactiveReasons : undefined,
     // Note: no `visible` or `bbox` — those require actual layout/rendering,
     // which a static HTML fetch can't provide.
     children: []
@@ -68,7 +103,7 @@ function flattenInteractive(node, list = []) {
     list.push({
       tag: node.tag, id: node.id, classes: node.classes, role: node.role,
       ariaLabel: node.ariaLabel, name: node.name, type: node.type,
-      href: node.href, text: node.text
+      href: node.href, text: node.text, interactiveReasons: node.interactiveReasons
     });
   }
   (node.children || []).forEach(c => flattenInteractive(c, list));
