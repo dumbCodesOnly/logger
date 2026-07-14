@@ -281,22 +281,31 @@ function buildHtmlReport(data) {
   code { background: #161b22; padding: 1px 5px; border-radius: 4px; color: #79c0ff; }
   .txt { color: #7ee787; font-size: 12px; }
   .badge { font-size: 10px; background: #238636; padding: 1px 6px; border-radius: 10px; }
+  .url-cell { max-width: 420px; overflow-wrap: anywhere; color: #79c0ff; }
   ul { list-style: none; padding-left: 18px; border-left: 1px dashed #30363d; }
   summary { cursor: pointer; padding: 2px 0; }
   details.leaf summary::-webkit-details-marker { color: #484f58; }
 </style></head>
 <body>
   <h1>${esc(data.url)}</h1>
-  <div class="meta">Captured ${esc(data.timestamp)} • ${data.totalNodes} DOM nodes • ${data.interactive.length} interactive elements</div>
+  <div class="meta">Captured ${esc(data.timestamp)} • ${data.totalNodes} DOM nodes • ${data.interactive.length} interactive elements • ${network.length} network requests</div>
+  ${uploadSummary}
   <div class="tabs">
     <div class="tab active" onclick="show('tree')">Tree View</div>
     <div class="tab" onclick="show('interactive')">Interactive Elements</div>
+    <div class="tab" onclick="show('network')">Network (${network.length})</div>
   </div>
   <section id="tree" class="active"><ul>${renderNode(data.tree)}</ul></section>
   <section id="interactive">
     <table>
       <tr><th>Tag</th><th>ID</th><th>Classes</th><th>Text / Label</th><th>Href</th><th>Position (x,y w×h)</th></tr>
       ${interactiveRows}
+    </table>
+  </section>
+  <section id="network">
+    <table>
+      <tr><th>Method</th><th>URL</th><th>Type</th><th>Status</th><th>Duration</th><th>Post size</th></tr>
+      ${networkRows}
     </table>
   </section>
   <script>
