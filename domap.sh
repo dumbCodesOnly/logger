@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-BASE_DIR="$HOME/domap"
+BASE_DIR="$HOME/logger"
 OUT_DIR="$BASE_DIR/reports"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HISTORY_FILE="$BASE_DIR/history.txt"
