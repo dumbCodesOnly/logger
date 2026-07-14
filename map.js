@@ -397,7 +397,11 @@ async function main() {
   try {
     // connect() gives us a fresh browser instance; open a new context/page directly.
     const context = await browser.newContext();
-    const { title, tree } = await mapUrl(context, args.url, args.waitSelector);
+    const { title, tree, network, upload } = await mapUrl(context, args.url, args.waitSelector, {
+      uploadSelector: args.uploadSelector,
+      uploadFile: args.uploadFile,
+      clickAfterUpload: args.clickAfterUpload,
+    });
     const interactive = flattenInteractive(tree);
     const data = {
       url: args.url,
@@ -405,16 +409,24 @@ async function main() {
       timestamp: new Date().toISOString(),
       totalNodes: countNodes(tree),
       interactive,
+      network,
+      upload,
       tree
     };
 
     fs.writeFileSync(path.join(args.out, 'dom.json'), JSON.stringify(data, null, 2));
+    fs.writeFileSync(path.join(args.out, 'network.json'), JSON.stringify(network, null, 2));
     fs.writeFileSync(path.join(args.out, 'report.html'), buildHtmlReport(data));
 
     console.log(`Page title: ${title}`);
     console.log(`Total DOM nodes: ${data.totalNodes}`);
     console.log(`Interactive elements: ${interactive.length}`);
+    console.log(`Network requests logged: ${network.length}`);
+    if (upload) {
+      console.log(`Upload attempt: ${upload.success ? 'success' : 'failed'}${upload.error ? ' (' + upload.error + ')' : ''}`);
+    }
     console.log(`JSON: ${path.join(args.out, 'dom.json')}`);
+    console.log(`Network: ${path.join(args.out, 'network.json')}`);
     console.log(`HTML: ${path.join(args.out, 'report.html')}`);
   } finally {
     await browser.close();
