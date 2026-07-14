@@ -387,6 +387,7 @@ function buildHtmlReport(data) {
       <td>${esc(el.text || el.ariaLabel || '')}</td>
       <td>${esc(el.href || '')}</td>
       <td>${el.bbox ? `${el.bbox.x},${el.bbox.y} ${el.bbox.w}x${el.bbox.h}` : ''}</td>
+      <td class="url-cell">${esc(el.sel || '')}</td>
     </tr>`).join('');
 
   const network = data.network || [];
@@ -400,15 +401,16 @@ function buildHtmlReport(data) {
       <td>${n.postDataSize ? n.postDataSize + ' B' : ''}</td>
     </tr>`).join('');
 
-  const upload = data.upload;
-  const uploadSummary = upload ? `
-    <div class="meta">
-      Upload attempt: ${upload.attempted ? (upload.success ? '<span class="badge">success</span>' : '<span class="badge" style="background:#8b1a1a">failed</span>') : 'not attempted'}
-      ${upload.selector ? ` • selector: <code>${esc(upload.selector)}</code>` : ''}
-      ${upload.file ? ` • file: <code>${esc(upload.file)}</code>` : ''}
-      ${upload.clicked ? ' • clicked follow-up button' : ''}
-      ${upload.error ? ` • error: ${esc(upload.error)}` : ''}
-    </div>` : '';
+  const actions = data.actions || [];
+  const actionsRows = actions.map(a => `
+    <tr>
+      <td>${esc((a.timestamp || '').replace('T', ' ').slice(0, 19))}</td>
+      <td><code>${esc(a.action || '')}</code></td>
+      <td>${esc(a.label || '')}</td>
+      <td class="url-cell">${esc(a.selector || '')}</td>
+      <td>${a.success ? '<span class="badge">ok</span>' : '<span class="badge" style="background:#8b1a1a">failed</span>'}</td>
+      <td>${esc(a.error || a.file || a.value || '')}</td>
+    </tr>`).join('');
 
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>DOM Map: ${esc(data.url)}</title>
