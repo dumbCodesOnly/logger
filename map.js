@@ -233,6 +233,129 @@ async function attemptImageUpload(page, { uploadSelector, uploadFile, clickAfter
   return result;
 }
 
+// Sorts an interactive element into the bucket that determines its default
+// action and which menu section it shows up under.
+function categorize(el) {
+  const tag = el.tag;
+  const type = (el.type || '').toLowerCase();
+  if (tag === 'input' && type === 'file') return 'upload';
+  if (tag === 'textarea' || (tag === 'input' && !['submit', 'button', 'checkbox', 'radio', 'file', 'image', 'reset'].includes(type))) return 'text';
+  if (tag === 'button' || tag === 'a' || (tag === 'input' && ['submit', 'button', 'image'].includes(type)) || el.role === 'button') return 'click';
+  return 'other';
+}
+
+function elementLabel(el) {
+  return el.text || el.ariaLabel || el.name || el.id || '(no label)';
+}
+
+// Maps the page, then drops into a live prompt loop: shows every clickable /
+// fillable / uploadable element grouped by type, lets the user pick one by
+// number, suggests a sensible default action for it, performs the action,
+// re-scans the DOM (since the action may have changed it), and repeats until
+// the user is done. All traffic across the whole session lands in `network`
+// because attachNetworkLogging() was already wired up before this runs.
+async function runInteractiveSession(page) {
+  const readline = require('readline');
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  const ask = (q) => new Promise((resolve) => rl.question(q, resolve));
+
+  const actions = [];
+  let tree, interactive;
+
+  async function rescan() {
+    tree = await page.evaluate(extractTree);
+    interactive = flattenInteractive(tree);
+  }
+  await rescan();
+
+  console.log('\n=== Interactive mode ===');
+  console.log('Page mapped. Pick an element below to click / fill / upload into it.\n');
+
+  while (true) {
+    const grouped = { upload: [], text: [], click: [], other: [] };
+    interactive.forEach((el, i) => grouped[categorize(el)].push({ ...el, idx: i }));
+
+    const printGroup = (label, arr) => {
+      if (!arr.length) return;
+      console.log(label);
+      arr.forEach((el) => {
+        console.log(`  [${el.idx}] <${el.tag}${el.type ? ' type=' + el.type : ''}> ${elementLabel(el)}`);
+      });
+      console.log('');
+    };
+    printGroup('\ud83d\udce4 Upload targets:', grouped.upload);
+    printGroup('\u2328\ufe0f  Text fields:', grouped.text);
+    printGroup('\ud83d\uddb1\ufe0f  Clickable:', grouped.click);
+    printGroup('\u2753 Other interactive:', grouped.other);
+
+    const answer = (await ask('Enter a number to select, "r" to rescan, or "done" to finish: ')).trim();
+    if (answer === 'done' || answer === 'q' || answer === '') { if (answer === '') continue; break; }
+    if (answer === 'r') { await rescan(); continue; }
+
+    const idx = parseInt(answer, 10);
+    if (Number.isNaN(idx) || !interactive[idx]) {
+      console.log('Invalid selection.\n');
+      continue;
+    }
+
+    const el = interactive[idx];
+    const category = categorize(el);
+    const defaultAction = category === 'upload' ? 'upload' : category === 'text' ? 'type' : 'click';
+    const actionAns = (await ask(`Action for [${idx}] ${elementLabel(el)} (upload/type/click) [${defaultAction}]: `)).trim() || defaultAction;
+
+    const entry = {
+      timestamp: new Date().toISOString(),
+      selector: el.sel,
+      tag: el.tag,
+      label: elementLabel(el),
+      action: actionAns,
+      success: false,
+      error: null,
+    };
+
+    try {
+      if (actionAns === 'upload') {
+        let filePath = (await ask('Path to file (blank = generate throwaway 1x1 PNG): ')).trim();
+        if (!filePath) {
+          filePath = path.join(require('os').tmpdir(), 'domap-test-upload.png');
+          if (!fs.existsSync(filePath)) {
+            fs.writeFileSync(filePath, Buffer.from(
+              'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+              'base64'
+            ));
+          }
+        }
+        entry.file = filePath;
+        await page.setInputFiles(el.sel, filePath);
+        entry.success = true;
+      } else if (actionAns === 'type') {
+        const text = await ask('Text to type: ');
+        entry.value = text;
+        await page.fill(el.sel, text);
+        entry.success = true;
+      } else if (actionAns === 'click') {
+        await page.click(el.sel, { timeout: 5000 });
+        entry.success = true;
+      } else {
+        entry.error = `Unknown action "${actionAns}"`;
+      }
+      // Give any request the action triggers a moment to fire and land in
+      // the network log before we move on.
+      await page.waitForLoadState('networkidle', { timeout: 4000 }).catch(() => {});
+    } catch (e) {
+      entry.error = e.message;
+    }
+
+    actions.push(entry);
+    console.log(entry.success ? `\u2705 ${actionAns} on [${idx}] done.\n` : `\u274c ${actionAns} on [${idx}] failed: ${entry.error}\n`);
+
+    await rescan();
+  }
+
+  rl.close();
+  return { tree, interactive, actions };
+}
+
 function buildHtmlReport(data) {
   const esc = (s) => (s || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
