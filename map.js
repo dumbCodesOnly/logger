@@ -9,10 +9,11 @@
  *   node map.js --url https://example.com --depth 0 --wait-selector "#app" --out ./reports/example
  *
  * On Android/Termux, Playwright cannot launch its bundled browser binaries
- * ("Unsupported platform: android"). Instead, this script connects over CDP
- * to a Chromium instance you start yourself, e.g.:
- *   chromium --headless --remote-debugging-port=9222 --no-sandbox &
- * Set CDP_URL to override the default (http://localhost:9222).
+ * ("Unsupported platform: android"), so this script connects to a remote
+ * browser instead — specifically Browserless.io's Playwright-native
+ * WebSocket endpoint (wss://.../chromium/playwright?token=...), via
+ * chromium.connect(). Set BROWSERLESS_WS_URL (or the legacy CDP_URL name)
+ * to point at your endpoint.
  */
 
 const fs = require('fs');
@@ -226,24 +227,29 @@ async function main() {
     }
   }
 
-  // Android/Termux can't launch Playwright's bundled browser binaries
-  // ("Unsupported platform: android"), so connect over CDP to a Chromium
-  // process started separately, e.g.:
-  //   chromium --headless --remote-debugging-port=9222 --no-sandbox &
-  const cdpUrl = process.env.CDP_URL || 'http://localhost:9222';
+  // Android/Termux can't launch Playwright's bundled browser binaries, so
+  // we always connect to a remote Browserless.io session instead. Browserless
+  // recommends chromium.connect() (Playwright's own server protocol) over a
+  // wss://.../chromium/playwright?token=... endpoint for Playwright clients
+  // — connectOverCDP() expects an http(s) endpoint it can query for a CDP
+  // websocket URL, and rejects a raw wss:// URL outright.
+  const wsUrl = process.env.BROWSERLESS_WS_URL || process.env.CDP_URL;
+  if (!wsUrl) {
+    console.error('Missing BROWSERLESS_WS_URL. Set it to your Browserless endpoint, e.g.:');
+    console.error('  wss://production-sfo.browserless.io/chromium/playwright?token=YOUR_TOKEN');
+    process.exit(1);
+  }
   let browser;
   try {
-    browser = await chromium.connectOverCDP(cdpUrl);
+    browser = await chromium.connect(wsUrl);
   } catch (e) {
-    console.error(`Could not connect to Chromium at ${cdpUrl}.`);
-    console.error('Start a headless Chromium with remote debugging first, e.g.:');
-    console.error('  chromium --headless --remote-debugging-port=9222 --no-sandbox &');
+    console.error(`Could not connect to Browserless at ${wsUrl.replace(/token=[^&]+/, 'token=***')}.`);
     console.error(`Original error: ${e.message}`);
     process.exit(1);
   }
   try {
-    // connectOverCDP gives us an existing browser context rather than a fresh one
-    const context = browser.contexts()[0] || await browser.newContext();
+    // connect() gives us a fresh browser instance; open a new context/page directly.
+    const context = await browser.newContext();
     const { title, tree } = await mapUrl(context, args.url, args.waitSelector);
     const interactive = flattenInteractive(tree);
     const data = {
