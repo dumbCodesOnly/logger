@@ -37,8 +37,9 @@ check_deps() {
       # (saves ~300-450MB of unused binary).
       (cd "$SCRIPT_DIR" && PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install playwright-chromium --no-audit --no-fund)
       if ! command -v chromium >/dev/null 2>&1 && ! command -v chromium-browser >/dev/null 2>&1; then
-        echo -e "${C_YELLOW}No system Chromium found.${C_RESET} Install with: pkg install chromium"
-        echo "Then start it before mapping: chromium --headless --remote-debugging-port=9222 --no-sandbox &"
+        echo -e "${C_YELLOW}No system Chromium found.${C_RESET} You have two options:"
+        echo "  1. Local: pkg install chromium, then: chromium --headless --remote-debugging-port=9222 --no-sandbox &"
+        echo "  2. Remote: choose 'Browserless.io' when mapping — no local browser needed."
       fi
     else
       echo "Cannot continue without it. Exiting."
