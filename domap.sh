@@ -32,7 +32,14 @@ check_deps() {
     echo -e "${C_YELLOW}Playwright not installed in $SCRIPT_DIR yet.${C_RESET}"
     read -rp "Install now? (y/n): " yn
     if [[ "$yn" == "y" || "$yn" == "Y" ]]; then
-      (cd "$SCRIPT_DIR" && npm install playwright-chromium --no-audit --no-fund)
+      # map.js connects to system Chromium via connectOverCDP() rather than
+      # launching Playwright's own bundled browser, so skip that download
+      # (saves ~300-450MB of unused binary).
+      (cd "$SCRIPT_DIR" && PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install playwright-chromium --no-audit --no-fund)
+      if ! command -v chromium >/dev/null 2>&1 && ! command -v chromium-browser >/dev/null 2>&1; then
+        echo -e "${C_YELLOW}No system Chromium found.${C_RESET} Install with: pkg install chromium"
+        echo "Then start it before mapping: chromium --headless --remote-debugging-port=9222 --no-sandbox &"
+      fi
     else
       echo "Cannot continue without it. Exiting."
       exit 1
