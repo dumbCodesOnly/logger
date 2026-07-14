@@ -55,8 +55,26 @@ normalize_url() {
   echo "$u"
 }
 
+# Token is stored outside the repo dir so it can never accidentally get
+# committed/pushed. Stored with chmod 600 (owner read/write only).
+BROWSERLESS_TOKEN_FILE="$BASE_DIR/browserless_token"
+
+get_browserless_cdp_url() {
+  local token
+  if [ -f "$BROWSERLESS_TOKEN_FILE" ]; then
+    token=$(cat "$BROWSERLESS_TOKEN_FILE")
+  else
+    read -rsp "Browserless API token (input hidden, stored in $BROWSERLESS_TOKEN_FILE): " token
+    echo ""
+    [ -z "$token" ] && { echo -e "${C_RED}No token given.${C_RESET}"; return 1; }
+    echo -n "$token" > "$BROWSERLESS_TOKEN_FILE"
+    chmod 600 "$BROWSERLESS_TOKEN_FILE"
+  fi
+  echo "wss://chrome.browserless.io?token=${token}"
+}
+
 run_map() {
-  local url depth wait_sel out_name
+  local url depth wait_sel out_name cdp_choice cdp_url
   read -rp "URL to map: " raw_url
   [ -z "$raw_url" ] && { echo -e "${C_RED}No URL given.${C_RESET}"; return; }
   url=$(normalize_url "$raw_url")
@@ -66,17 +84,32 @@ run_map() {
 
   read -rp "CSS selector to wait for before capturing (optional, e.g. #app): " wait_sel
 
+  echo -e "${C_CYAN}Browser source:${C_RESET} 1) Local Chromium (localhost:9222)  2) Remote Browserless.io"
+  read -rp "Choose (1/2, default 1): " cdp_choice
+  cdp_choice=${cdp_choice:-1}
+  if [ "$cdp_choice" = "2" ]; then
+    cdp_url=$(get_browserless_cdp_url) || return
+  fi
+
   out_name=$(echo "$url" | sed -E 's#https?://##; s#[^a-zA-Z0-9]+#_#g' | cut -c1-60)
   ts=$(date +%Y%m%d_%H%M%S)
   report_dir="$OUT_DIR/${out_name}_${ts}"
   mkdir -p "$report_dir"
 
   echo -e "${C_GREEN}Mapping $url (depth=$depth)...${C_RESET}"
-  node "$SCRIPT_DIR/map.js" \
-    --url "$url" \
-    --depth "$depth" \
-    --wait-selector "${wait_sel:-}" \
-    --out "$report_dir" \
+  if [ -n "${cdp_url:-}" ]; then
+    CDP_URL="$cdp_url" node "$SCRIPT_DIR/map.js" \
+      --url "$url" \
+      --depth "$depth" \
+      --wait-selector "${wait_sel:-}" \
+      --out "$report_dir"
+  else
+    node "$SCRIPT_DIR/map.js" \
+      --url "$url" \
+      --depth "$depth" \
+      --wait-selector "${wait_sel:-}" \
+      --out "$report_dir"
+  fi \
   && echo "$(date '+%Y-%m-%d %H:%M') | $url | $report_dir" >> "$HISTORY_FILE" \
   && echo -e "${C_GREEN}Done.${C_RESET} Report: $report_dir/report.html"
 }
