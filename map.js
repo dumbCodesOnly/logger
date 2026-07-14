@@ -185,6 +185,37 @@ function attachNetworkLogging(page) {
   return log;
 }
 
+// Uploads a file at `selector`, handling both cases:
+//  1. A bare <input type="file">: setInputFiles works directly, no dialog
+//     ever opens.
+//  2. A button/link/div that *triggers* a native OS file-chooser dialog
+//     when clicked (e.g. a styled "Upload Image" button wired to a hidden
+//     file input, or one opened via JS). Clicking this blind would open a
+//     real native dialog that headless/remote Chromium can never dismiss —
+//     the click just hangs until Browserless's own idle timeout kills the
+//     session (which is what "Target page, context or browser has been
+//     closed" actually means here). Playwright avoids that by intercepting
+//     the dialog at the CDP level, but only if a 'filechooser' listener is
+//     registered in parallel with the click, per Playwright's docs.
+async function performUpload(page, selector, filePath) {
+  const info = await page.$eval(selector, (el) => ({
+    tag: el.tagName.toLowerCase(),
+    type: (el.getAttribute('type') || '').toLowerCase(),
+  })).catch(() => null);
+
+  if (info && info.tag === 'input' && info.type === 'file') {
+    await page.setInputFiles(selector, filePath);
+    return 'input';
+  }
+
+  const [chooser] = await Promise.all([
+    page.waitForEvent('filechooser', { timeout: 8000 }),
+    page.click(selector),
+  ]);
+  await chooser.setFiles(filePath);
+  return 'filechooser';
+}
+
 // Finds a file input (by selector, or the first <input type="file"> on the
 // page if no selector given), uploads a file into it via setInputFiles, and
 // optionally clicks a submit/upload button afterward. If no file is given,
