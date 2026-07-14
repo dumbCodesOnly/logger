@@ -7,13 +7,11 @@
     "map": "node map.js",
     "map-static": "node map-static.js"
   },
-<<<<<<< Updated upstream
   "dependencies": {
     "playwright-chromium": "^1.61.1",
     "cheerio": "^1.0.0"
-=======
+  },
   "allowScripts": {
     "playwright-chromium@1.61.1": true
->>>>>>> Stashed changes
   }
 }
