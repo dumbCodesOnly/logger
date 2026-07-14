@@ -74,6 +74,36 @@ run_map() {
   && echo -e "${C_GREEN}Done.${C_RESET} Report: $report_dir/report.html"
 }
 
+run_map_static() {
+  local url out_name
+  read -rp "URL to map (static, no browser): " raw_url
+  [ -z "$raw_url" ] && { echo -e "${C_RED}No URL given.${C_RESET}"; return; }
+  url=$(normalize_url "$raw_url")
+
+  if [ ! -d "$SCRIPT_DIR/node_modules/cheerio" ]; then
+    echo -e "${C_YELLOW}cheerio not installed in $SCRIPT_DIR yet.${C_RESET}"
+    read -rp "Install now? (y/n): " yn
+    if [[ "$yn" == "y" || "$yn" == "Y" ]]; then
+      (cd "$SCRIPT_DIR" && npm install cheerio --no-audit --no-fund)
+    else
+      echo "Cannot continue without it."
+      return
+    fi
+  fi
+
+  out_name=$(echo "$url" | sed -E 's#https?://##; s#[^a-zA-Z0-9]+#_#g' | cut -c1-60)
+  ts=$(date +%Y%m%d_%H%M%S)
+  report_dir="$OUT_DIR/${out_name}_${ts}_static"
+  mkdir -p "$report_dir"
+
+  echo -e "${C_GREEN}Mapping $url (static fetch, no JS)...${C_RESET}"
+  node "$SCRIPT_DIR/map-static.js" \
+    --url "$url" \
+    --out "$report_dir" \
+  && echo "$(date '+%Y-%m-%d %H:%M') | $url | $report_dir" >> "$HISTORY_FILE" \
+  && echo -e "${C_GREEN}Done.${C_RESET} JSON: $report_dir/dom-static.json"
+}
+
 list_reports() {
   echo -e "${C_CYAN}Past reports:${C_RESET}"
   if [ ! -s "$HISTORY_FILE" ]; then
@@ -119,18 +149,20 @@ main_menu() {
   check_deps
   while true; do
     echo ""
-    echo -e "${C_BOLD}1)${C_RESET} Map a new URL"
-    echo -e "${C_BOLD}2)${C_RESET} List past reports"
-    echo -e "${C_BOLD}3)${C_RESET} Open a report (HTML)"
-    echo -e "${C_BOLD}4)${C_RESET} Print quick summary of a report"
-    echo -e "${C_BOLD}5)${C_RESET} Exit"
+    echo -e "${C_BOLD}1)${C_RESET} Map a new URL (browser, JS-rendered)"
+    echo -e "${C_BOLD}2)${C_RESET} Map a new URL (static fetch, no browser)"
+    echo -e "${C_BOLD}3)${C_RESET} List past reports"
+    echo -e "${C_BOLD}4)${C_RESET} Open a report (HTML)"
+    echo -e "${C_BOLD}5)${C_RESET} Print quick summary of a report"
+    echo -e "${C_BOLD}6)${C_RESET} Exit"
     read -rp "Choose: " choice
     case "$choice" in
       1) run_map ;;
-      2) list_reports ;;
-      3) open_report ;;
-      4) show_summary ;;
-      5) echo "Bye."; exit 0 ;;
+      2) run_map_static ;;
+      3) list_reports ;;
+      4) open_report ;;
+      5) show_summary ;;
+      6) echo "Bye."; exit 0 ;;
       *) echo -e "${C_RED}Invalid choice.${C_RESET}" ;;
     esac
   done
