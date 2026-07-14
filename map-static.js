@@ -115,6 +115,46 @@ function countNodes(node) {
   return 1 + (node.children || []).reduce((sum, c) => sum + countNodes(c), 0);
 }
 
+// Some frameworks embed their initial render state as JSON directly in the
+// HTML, even for content that otherwise only appears after JS runs. This
+// won't give a real DOM (no execution happens), but the raw props/data are
+// sometimes enough to see what a page *would* render — e.g. form field
+// names, button labels, API routes — without needing a browser.
+function extractEmbeddedState($) {
+  const found = {};
+
+  // Next.js (pages router): <script id="__NEXT_DATA__" type="application/json">
+  const nextData = $('#__NEXT_DATA__').first();
+  if (nextData.length) {
+    try { found.nextData = JSON.parse(nextData.html()); }
+    catch (e) { found.nextDataParseError = e.message; }
+  }
+
+  // Next.js (app router) / React Server Components: flight data is streamed
+  // as a series of self-executing script tags pushing into __next_f. These
+  // aren't valid standalone JSON, so just count and sample them raw.
+  const flightScripts = $('script').filter((_, el) => {
+    const t = $(el).html() || '';
+    return t.includes('self.__next_f.push');
+  });
+  if (flightScripts.length) {
+    found.rscFlightChunks = flightScripts.length;
+    found.rscFlightSample = ($(flightScripts.get(0)).html() || '').slice(0, 500);
+  }
+
+  // Generic JSON-LD structured data (schema.org) — not framework state, but
+  // another good source of machine-readable content without JS execution.
+  const jsonLd = $('script[type="application/ld+json"]');
+  if (jsonLd.length) {
+    found.jsonLd = jsonLd.map((_, el) => {
+      try { return JSON.parse($(el).html()); }
+      catch (e) { return { parseError: e.message }; }
+    }).get();
+  }
+
+  return Object.keys(found).length ? found : undefined;
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (!args.url) {
@@ -139,6 +179,7 @@ async function main() {
   const bodyEl = $('body').get(0);
   const tree = bodyEl ? walk($, bodyEl) : null;
   const interactive = flattenInteractive(tree);
+  const embeddedState = extractEmbeddedState($);
 
   const data = {
     url: args.url,
@@ -147,6 +188,7 @@ async function main() {
     timestamp: new Date().toISOString(),
     totalNodes: countNodes(tree),
     interactive,
+    embeddedState,
     tree
   };
 
@@ -157,8 +199,18 @@ async function main() {
   console.log(`Total DOM nodes: ${data.totalNodes}`);
   console.log(`Interactive elements found: ${interactive.length}`);
   console.log(`JSON: ${path.join(args.out, 'dom-static.json')}`);
+  if (embeddedState) {
+    const parts = [];
+    if (embeddedState.nextData) parts.push('Next.js __NEXT_DATA__');
+    if (embeddedState.rscFlightChunks) parts.push(`${embeddedState.rscFlightChunks} RSC flight chunk(s)`);
+    if (embeddedState.jsonLd) parts.push(`${embeddedState.jsonLd.length} JSON-LD block(s)`);
+    console.log(`Embedded state found: ${parts.join(', ')}`);
+  }
   if (interactive.length === 0) {
     console.log(`\nNo interactive elements found in raw HTML — this page likely renders its UI client-side via JS. You'll need map.js (browser-based) for that content.`);
+    if (embeddedState && embeddedState.nextData) {
+      console.log(`However, __NEXT_DATA__ was found — check dom-static.json's "embeddedState.nextData" field, it may contain page props even without rendering.`);
+    }
   }
 }
 
