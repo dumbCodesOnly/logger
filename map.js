@@ -52,6 +52,27 @@ function extractTree() {
     return t.length > MAX_TEXT ? t.slice(0, MAX_TEXT) + '…' : t;
   }
 
+  // Builds a selector that can be used later, in a fresh page.evaluate or
+  // page.click/fill/setInputFiles call, to re-find this exact element. #id
+  // is used when available; otherwise an nth-of-type path up to <body>.
+  function cssPath(el) {
+    if (el.id) return '#' + CSS.escape(el.id);
+    const parts = [];
+    let node = el;
+    while (node && node.nodeType === 1 && node !== document.body) {
+      if (node.id) { parts.unshift('#' + CSS.escape(node.id)); break; }
+      let selector = node.tagName.toLowerCase();
+      const parent = node.parentElement;
+      if (parent) {
+        const siblings = Array.from(parent.children).filter(c => c.tagName === node.tagName);
+        if (siblings.length > 1) selector += `:nth-of-type(${siblings.indexOf(node) + 1})`;
+      }
+      parts.unshift(selector);
+      node = parent;
+    }
+    return 'body > ' + parts.join(' > ');
+  }
+
   function walk(el, depth) {
     if (!el || el.nodeType !== 1) return null;
     const tag = el.tagName;
@@ -71,6 +92,7 @@ function extractTree() {
       type: el.getAttribute('type') || undefined,
       href: tag === 'A' ? el.getAttribute('href') || undefined : undefined,
       text: shortText(el) || undefined,
+      sel: cssPath(el),
       visible,
       interactive,
       bbox: visible ? {
