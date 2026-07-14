@@ -16,12 +16,16 @@ C_RESET="\033[0m"; C_BOLD="\033[1m"; C_CYAN="\033[36m"; C_GREEN="\033[32m"; C_YE
 
 banner() {
   echo -e "${C_CYAN}${C_BOLD}"
-  echo "  ┌─────────────────────────────────┐"
+  echo "  ┌─────────────────────────────────────────┐"
   echo "  │        DOMap - Termux Edition    │"
   echo "  │   DOM / UI structure mapper      │"
-  echo "  └─────────────────────────────────┘"
+  echo "  └─────────────────────────────────────────┘"
   echo -e "${C_RESET}"
 }
+
+# Token is stored outside the repo dir so it can never accidentally get
+# committed/pushed. Stored with chmod 600 (owner read/write only).
+BROWSERLESS_TOKEN_FILE="$BASE_DIR/browserless_token"
 
 check_deps() {
   if ! command -v node >/dev/null 2>&1; then
@@ -32,15 +36,10 @@ check_deps() {
     echo -e "${C_YELLOW}Playwright not installed in $SCRIPT_DIR yet.${C_RESET}"
     read -rp "Install now? (y/n): " yn
     if [[ "$yn" == "y" || "$yn" == "Y" ]]; then
-      # map.js connects to system Chromium via connectOverCDP() rather than
-      # launching Playwright's own bundled browser, so skip that download
-      # (saves ~300-450MB of unused binary).
+      # We only ever connect to a remote Browserless.io session, never launch
+      # a local browser, so skip Playwright's bundled-browser download
+      # entirely (saves ~300-450MB of unused binary).
       (cd "$SCRIPT_DIR" && PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install playwright-chromium --no-audit --no-fund)
-      if ! command -v chromium >/dev/null 2>&1 && ! command -v chromium-browser >/dev/null 2>&1; then
-        echo -e "${C_YELLOW}No system Chromium found.${C_RESET} You have two options:"
-        echo "  1. Local: pkg install chromium, then: chromium --headless --remote-debugging-port=9222 --no-sandbox &"
-        echo "  2. Remote: choose 'Browserless.io' when mapping — no local browser needed."
-      fi
     else
       echo "Cannot continue without it. Exiting."
       exit 1
@@ -56,11 +55,7 @@ normalize_url() {
   echo "$u"
 }
 
-# Token is stored outside the repo dir so it can never accidentally get
-# committed/pushed. Stored with chmod 600 (owner read/write only).
-BROWSERLESS_TOKEN_FILE="$BASE_DIR/browserless_token"
-
-get_browserless_cdp_url() {
+get_browserless_ws_url() {
   local token
   if [ -f "$BROWSERLESS_TOKEN_FILE" ]; then
     token=$(cat "$BROWSERLESS_TOKEN_FILE")
@@ -71,11 +66,12 @@ get_browserless_cdp_url() {
     echo -n "$token" > "$BROWSERLESS_TOKEN_FILE"
     chmod 600 "$BROWSERLESS_TOKEN_FILE"
   fi
-  echo "wss://chrome.browserless.io?token=${token}"
+  # Playwright-native protocol path, per Browserless docs (not the raw CDP path).
+  echo "wss://production-sfo.browserless.io/chromium/playwright?token=${token}"
 }
 
 run_map() {
-  local url depth wait_sel out_name cdp_choice cdp_url
+  local url depth wait_sel out_name ws_url
   read -rp "URL to map: " raw_url
   [ -z "$raw_url" ] && { echo -e "${C_RED}No URL given.${C_RESET}"; return; }
   url=$(normalize_url "$raw_url")
@@ -85,32 +81,19 @@ run_map() {
 
   read -rp "CSS selector to wait for before capturing (optional, e.g. #app): " wait_sel
 
-  echo -e "${C_CYAN}Browser source:${C_RESET} 1) Local Chromium (localhost:9222)  2) Remote Browserless.io"
-  read -rp "Choose (1/2, default 1): " cdp_choice
-  cdp_choice=${cdp_choice:-1}
-  if [ "$cdp_choice" = "2" ]; then
-    cdp_url=$(get_browserless_cdp_url) || return
-  fi
+  ws_url=$(get_browserless_ws_url) || return
 
   out_name=$(echo "$url" | sed -E 's#https?://##; s#[^a-zA-Z0-9]+#_#g' | cut -c1-60)
   ts=$(date +%Y%m%d_%H%M%S)
   report_dir="$OUT_DIR/${out_name}_${ts}"
   mkdir -p "$report_dir"
 
-  echo -e "${C_GREEN}Mapping $url (depth=$depth)...${C_RESET}"
-  if [ -n "${cdp_url:-}" ]; then
-    CDP_URL="$cdp_url" node "$SCRIPT_DIR/map.js" \
-      --url "$url" \
-      --depth "$depth" \
-      --wait-selector "${wait_sel:-}" \
-      --out "$report_dir"
-  else
-    node "$SCRIPT_DIR/map.js" \
-      --url "$url" \
-      --depth "$depth" \
-      --wait-selector "${wait_sel:-}" \
-      --out "$report_dir"
-  fi \
+  echo -e "${C_GREEN}Mapping $url (depth=$depth) via Browserless.io...${C_RESET}"
+  BROWSERLESS_WS_URL="$ws_url" node "$SCRIPT_DIR/map.js" \
+    --url "$url" \
+    --depth "$depth" \
+    --wait-selector "${wait_sel:-}" \
+    --out "$report_dir" \
   && echo "$(date '+%Y-%m-%d %H:%M') | $url | $report_dir" >> "$HISTORY_FILE" \
   && echo -e "${C_GREEN}Done.${C_RESET} Report: $report_dir/report.html"
 }
@@ -191,7 +174,7 @@ main_menu() {
   check_deps
   while true; do
     echo ""
-    echo -e "${C_BOLD}1)${C_RESET} Map a new URL (browser, JS-rendered)"
+    echo -e "${C_BOLD}1)${C_RESET} Map a new URL (Browserless.io, JS-rendered)"
     echo -e "${C_BOLD}2)${C_RESET} Map a new URL (static fetch, no browser)"
     echo -e "${C_BOLD}3)${C_RESET} List past reports"
     echo -e "${C_BOLD}4)${C_RESET} Open a report (HTML)"
