@@ -4,9 +4,11 @@
   "description": "Termux DOM/UI structure mapper using headless Chromium",
   "main": "map.js",
   "scripts": {
-    "map": "node map.js"
+    "map": "node map.js",
+    "map-static": "node map-static.js"
   },
   "dependencies": {
-    "playwright-chromium": "^1.61.1"
+    "playwright-chromium": "^1.61.1",
+    "cheerio": "^1.0.0"
   }
 }
