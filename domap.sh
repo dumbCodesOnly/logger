@@ -199,7 +199,8 @@ main_menu() {
     echo -e "${C_BOLD}3)${C_RESET} List past reports"
     echo -e "${C_BOLD}4)${C_RESET} Open a report (HTML)"
     echo -e "${C_BOLD}5)${C_RESET} Print quick summary of a report"
-    echo -e "${C_BOLD}6)${C_RESET} Exit"
+    echo -e "${C_BOLD}6)${C_RESET} Interact with a mapped page (plan offline, run in a fresh session)"
+    echo -e "${C_BOLD}7)${C_RESET} Exit"
     read -rp "Choose: " choice
     case "$choice" in
       1) run_map ;;
@@ -207,7 +208,8 @@ main_menu() {
       3) list_reports ;;
       4) open_report ;;
       5) show_summary ;;
-      6) echo "Bye."; exit 0 ;;
+      6) run_interact ;;
+      7) echo "Bye."; exit 0 ;;
       *) echo -e "${C_RED}Invalid choice.${C_RESET}" ;;
     esac
   done
