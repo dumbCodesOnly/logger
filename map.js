@@ -436,17 +436,17 @@ function buildHtmlReport(data) {
 </style></head>
 <body>
   <h1>${esc(data.url)}</h1>
-  <div class="meta">Captured ${esc(data.timestamp)} • ${data.totalNodes} DOM nodes • ${data.interactive.length} interactive elements • ${network.length} network requests</div>
-  ${uploadSummary}
+  <div class="meta">Captured ${esc(data.timestamp)} • ${data.totalNodes} DOM nodes • ${data.interactive.length} interactive elements • ${network.length} network requests • ${actions.length} actions performed</div>
   <div class="tabs">
     <div class="tab active" onclick="show('tree')">Tree View</div>
     <div class="tab" onclick="show('interactive')">Interactive Elements</div>
     <div class="tab" onclick="show('network')">Network (${network.length})</div>
+    <div class="tab" onclick="show('actions')">Actions (${actions.length})</div>
   </div>
   <section id="tree" class="active"><ul>${renderNode(data.tree)}</ul></section>
   <section id="interactive">
     <table>
-      <tr><th>Tag</th><th>ID</th><th>Classes</th><th>Text / Label</th><th>Href</th><th>Position (x,y w×h)</th></tr>
+      <tr><th>Tag</th><th>ID</th><th>Classes</th><th>Text / Label</th><th>Href</th><th>Position (x,y w×h)</th><th>Selector</th></tr>
       ${interactiveRows}
     </table>
   </section>
@@ -454,6 +454,12 @@ function buildHtmlReport(data) {
     <table>
       <tr><th>Method</th><th>URL</th><th>Type</th><th>Status</th><th>Duration</th><th>Post size</th></tr>
       ${networkRows}
+    </table>
+  </section>
+  <section id="actions">
+    <table>
+      <tr><th>Time</th><th>Action</th><th>Element</th><th>Selector</th><th>Result</th><th>Detail</th></tr>
+      ${actionsRows}
     </table>
   </section>
   <script>
