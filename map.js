@@ -319,17 +319,28 @@ function buildHtmlReport(data) {
 </body></html>`;
 }
 
-async function mapUrl(browser, url, waitSelector) {
+async function mapUrl(browser, url, waitSelector, interactionOpts = {}) {
   const page = await browser.newPage({ viewport: { width: 412, height: 915 } }); // typical phone viewport
   page.setDefaultTimeout(30000);
+
+  // Attach BEFORE goto so the initial page load's requests are captured too.
+  const network = attachNetworkLogging(page);
+
   await page.goto(url, { waitUntil: 'networkidle' });
   if (waitSelector) {
     try { await page.waitForSelector(waitSelector, { timeout: 10000 }); } catch (e) { /* continue anyway */ }
   }
+
+  let upload = null;
+  const { uploadSelector, uploadFile, clickAfterUpload } = interactionOpts;
+  if (uploadSelector || uploadFile || clickAfterUpload) {
+    upload = await attemptImageUpload(page, { uploadSelector, uploadFile, clickAfterUpload });
+  }
+
   const title = await page.title();
   const tree = await page.evaluate(extractTree);
   await page.close();
-  return { title, tree };
+  return { title, tree, network, upload };
 }
 
 async function main() {
